@@ -39,4 +39,5 @@ while True:
 
     broadcast(room, f'{name} just joined the room! \n')
 
-    
+    thread = threading.Thread(target=sendMessage, args=(name, room, client))
+    thread.start()
