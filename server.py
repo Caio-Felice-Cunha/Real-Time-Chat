@@ -1,3 +1,4 @@
+from email import message
 import socket
 import threading
 
@@ -14,8 +15,13 @@ def broadcast(room, message):
     for i in rooms[room]:
         if isinstance(message, str):
             message = message.encode()
-        #i.send(message)
-        print(i)
+        i.send(message)
+
+def sendMessage(name, room, client):
+    while True:
+        message = client.recv(1024)
+        message = f'{name}: {message.decode()}\n'
+        broadcast(room, message)
 
 while True:
     client, addr = server.accept()
@@ -32,3 +38,5 @@ while True:
     print(f'{name} has connected in the room {room}! INFO {addr}')
 
     broadcast(room, f'{name} just joined the room! \n')
+
+    
