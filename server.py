@@ -1,4 +1,3 @@
-from email import message
 import socket
 import threading
 
@@ -12,32 +11,65 @@ server.listen()
 rooms = {}
 
 def broadcast(room, message):
-    for i in rooms[room]:
-        if isinstance(message, str):
-            message = message.encode()
-        i.send(message)
+    """Broadcasts a message to all clients in a given room."""
+    for client in rooms.get(room, []):
+        try:
+            client.send(message.encode() if isinstance(message, str) else message)
+        except Exception as e:
+            print(f"Failed to send message: {e}")
+            continue
 
-def sendMessage(name, room, client):
+def handle_client(name, room, client):
+    """Handles messages from a specific client."""
+    try:
+        while True:
+            message = client.recv(1024)
+            if not message:
+                break  # Client disconnected
+            broadcast(room, f"{name}: {message.decode(errors='ignore')}\n")
+    except Exception as e:
+        print(f"Error handling client {name}: {e}")
+    finally:
+        remove_client(name, room, client)
+
+def remove_client(name, room, client):
+    """Removes a client from the room and closes the socket."""
+    if room in rooms:
+        rooms[room].remove(client)
+        broadcast(room, f"{name} has left the room.\n")
+        print(f"{name} disconnected from room {room}.")
+    client.close()
+
+def main():
+    """Main server loop for accepting and handling clients."""
+    print(f"Server is listening on {HOST}:{PORT}...")
     while True:
-        message = client.recv(1024)
-        message = f'{name}: {message.decode()}\n'
-        broadcast(room, message)
+        try:
+            client, addr = server.accept()
+            print(f"Connection from {addr}")
 
-while True:
-    client, addr = server.accept()
-    
-    client.send(b'SALA')
-    room = client.recv(1024).decode()
-    name = client.recv(1024).decode()
-    
-    if room not in rooms.keys():
-        rooms[room] = []
+            # Initialize client
+            client.send(b"ROOM")
+            room = client.recv(1024).decode(errors='ignore').strip()
+            name = client.recv(1024).decode(errors='ignore').strip()
 
-    rooms[room].append(client)
+            # Create room if it doesn't exist
+            if room not in rooms:
+                rooms[room] = []
 
-    print(f'{name} has connected in the room {room}! INFO {addr}')
+            rooms[room].append(client)
+            print(f"{name} joined room {room} from {addr}")
 
-    broadcast(room, f'{name} just joined the room! \n')
+            broadcast(room, f"{name} just joined the room!\n")
 
-    thread = threading.Thread(target=sendMessage, args=(name, room, client))
-    thread.start()
+            # Start thread for client
+            threading.Thread(target=handle_client, args=(name, room, client), daemon=True).start()
+        except Exception as e:
+            print(f"Error accepting client: {e}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
+        server.close()
